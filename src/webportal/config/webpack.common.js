@@ -69,6 +69,7 @@ const config = (env, argv) => ({
     'hardware': './src/app/cluster-view/hardware/hardware.component.js',
     'hardwareDetail': './src/app/cluster-view/hardware/hardware-detail.component.js',
     'k8s': './src/app/cluster-view/k8s/k8s.component.js',
+    'nodeStatus': './src/app/cluster-view/node-status/node-status.jsx',
     'docs': './src/app/job/job-docs/job-docs.component.js',
     'plugin': './src/app/plugin/plugin.component.js',
   },
@@ -328,6 +329,10 @@ const config = (env, argv) => ({
     generateHtml({
       filename: 'cluster-view/hardware/detail.html',
       chunks: ['layout', 'hardwareDetail'],
+    }),
+    generateHtml({
+      filename: 'cluster-view/node-status.html',
+      chunks: ['layout', 'nodeStatus'],
     }),
     generateHtml({
       filename: 'docs.html',

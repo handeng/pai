@@ -34,6 +34,7 @@ module.exports = {
         "src/app/home/**/*.js",
         "src/app/user/fabric/**/*.js",
         "src/app/job-submission/**/*.js",
+        "src/app/cluster-view/node-status/**/*.js"
       ],
       "parser": "babel-eslint"
     }
