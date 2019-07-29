@@ -18,13 +18,10 @@
 import config from '../../config/webportal.config';
 import {get, isNil} from 'lodash';
 
-const username = cookies.get('user');
-const token = cookies.get('token');
-
 const prometheusUri = config.prometheusUri;
 
 const getHostname = (host) => host.split(':', 1)[0];
-const getInstanceName = (hostIP) => hostIP + '9102';
+const nodeIpToKey = (nodeIp) => nodeIp.split('.').join('-');
 
 const metricReducer = (accumulator, currentValue) => {
   accumulator[currentValue.key] = currentValue;
@@ -42,7 +39,7 @@ export async function getNodesHealthInfo() {
     const nodeHealth = results
       .map((result) => {
         return {
-          key: result.metric.name,
+          key: nodeIpToKey(result.metric.name),
           ip: result.metric.name,
           ready: result.metric.ready,
           unschedulable: result.metric.unschedulable,
@@ -66,7 +63,7 @@ export async function getAllAvailableNodesName() {
     const results = get(json, 'data.result', []);
     return results.map((result) => {
       return {
-        key: getHostname(result.metric.instance),
+        key: nodeIpToKey(getHostname(result.metric.instance)),
         instance: result.metric.instance,
         nodeIP: getHostname(result.metric.instance),
         nodeName: result.metric.nodename,
@@ -78,7 +75,7 @@ export async function getAllAvailableNodesName() {
   }
 }
 
-export async function getAvailableGpuPerNode() {
+export async function getNodeAvailableGpu() {
   const res = await fetch(`${prometheusUri}/api/v1/query?query=yarn_node_gpu_available`);
 
   if (res.ok) {
@@ -86,8 +83,8 @@ export async function getAvailableGpuPerNode() {
     const results = get(json, 'data.result', []);
     return results.map((result) => {
       return {
-        key: result.metric.node_ip,
-        totolGpu: parseInt(result.value[1]),
+        key: nodeIpToKey(result.metric.node_ip),
+        availableGpu: parseInt(result.value[1]),
       };
     }).reduce(metricReducer, {});
   } else {
@@ -96,7 +93,7 @@ export async function getAvailableGpuPerNode() {
   }
 }
 
-export async function getTotalGpuPerNode() {
+export async function getNodeTotalGpu() {
   const res = await fetch(`${prometheusUri}/api/v1/query?query=yarn_node_gpu_total`);
 
   if (res.ok) {
@@ -104,8 +101,8 @@ export async function getTotalGpuPerNode() {
     const results = get(json, 'data.result', []);
     return results.map((result) => {
       return {
-        key: result.metric.node_ip,
-        totolGpu: parseInt(result.value[1]),
+        key: nodeIpToKey(result.metric.node_ip),
+        totalGpu: parseInt(result.value[1]),
       };
     }).reduce(metricReducer, {});
   } else {
@@ -123,7 +120,7 @@ export async function getNodeServices() {
     return results
       .map((result) => {
         return {
-          key: getHostname(result.metric.instance),
+          key: nodeIpToKey(getHostname(result.metric.instance)),
           serviceName: result.metric.name,
         };
       })
@@ -154,7 +151,7 @@ export async function getNodeJobGPUStatistics() {
     return results
       .map((result) => {
         return {
-          key: getHostname(result.metric.instance),
+          key: nodeIpToKey(getHostname(result.metric.instance)),
           job_name: result.metric.job_name,
           gpuIndex: result.metric.minor_number,
           roleName: result.metric.role_name,

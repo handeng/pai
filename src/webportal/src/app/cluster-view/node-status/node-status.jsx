@@ -28,9 +28,17 @@ import {
   Text,
   Stack,
 } from 'office-ui-fabric-react';
-import React, { useEffect } from 'react';
+import React, {useEffect, useState} from 'react';
 import ReactDOM from 'react-dom';
-import {getNodeList, getNodesHealthInfo, getNodeServices, getNodeJobGPUStatistics} from './conn';
+import {
+  getNodesHealthInfo,
+  getAllAvailableNodesName,
+  getNodeAvailableGpu,
+  getNodeTotalGpu,
+  getNodeServices,
+  getNodeJobGPUStatistics,
+} from './conn';
+import {get, isNil} from 'lodash';
 
 const contentWrapper = document.getElementById('content-wrapper');
 
@@ -39,6 +47,7 @@ const columns = [
     key: 'nodeName',
     name: 'Node Name',
     fieldName: 'nodeName',
+    isResizable: true,
     // minWidth: columnWidth,
   },
   {
@@ -62,7 +71,7 @@ const columns = [
   {
     key: 'AvalGPU',
     name: 'Avaliable GPU',
-    fieldName: 'AvalGPU',
+    fieldName: 'avalGPU',
     // minWidth: columnWidth,
   },
   {
@@ -74,43 +83,108 @@ const columns = [
   {
     key: 'services',
     name: 'Services',
-    fieldName: 'services',
+    isResizable: true,
+    onRender: (nodeStatistics) => {
+      const content = nodeStatistics.services.map((service, index) => {
+        return (
+          <Text key={index}>{service}</Text>
+        );
+      });
+      return (
+        <Stack>
+          {content}
+        </Stack>
+      );
+    },
     // minWidth: columnWidth,
   },
   {
-    key: 'pods',
-    name: 'Pods',
-    fieldName: 'pods',
-    // minWidth: columnWidth,
+    key: 'tasks',
+    name: 'Tasks',
+    isResizable: true,
+    onRender: (nodeStatistics) => {
+      const content = nodeStatistics.gpuStatistics.map(
+        (jobGpuStatistics, index) => {
+          let fontColor;
+          if (jobGpuStatistics.gpuUsage < 5) {
+            fontColor = 'red';
+          }
+          return (
+            <Text key={index} styles={{root: {color: fontColor}}}>{`[${
+              jobGpuStatistics.job_name
+            }](gpu usage: ${jobGpuStatistics.gpuUsage}%)(gpu: #${
+              jobGpuStatistics.gpuIndex
+            })`}</Text>
+          );
+        }
+      );
+      return (
+      <Stack>
+        {content}
+      </Stack>);
+    },
+    minWidth: 500,
   },
 ];
 
-const value = [
-  {key: '1', name: 'name', value: 'value'},
-  {key: '2', name: 'name', value: 'value'},
-];
-
 const NodeStatus = () => {
+  const [value, setValue] = useState([]);
+
   useEffect(() => {
-    getNodeJobGPUStatistics()
-      .then((nodeList) => {
-        console.log(nodeList);
+    Promise.all([
+      getNodesHealthInfo(),
+      getAllAvailableNodesName(),
+      getNodeAvailableGpu(),
+      getNodeTotalGpu(),
+      getNodeServices(),
+      getNodeJobGPUStatistics()]
+    )
+      .then((values) => {
+        const nodeHealthInfo = values[0];
+        const avaliableNodoName = values[1];
+        const nodeAvaliableGpu = values[2];
+        const nodeTotalGpu = values[3];
+        const nodeServices = values[4];
+        const nodeJobGPUStatistics = values[5];
+
+        const nodeStatistics = Object.keys(nodeHealthInfo).map((nodeKey) => {
+          const gpuCap = get(nodeTotalGpu, `${nodeKey}.totalGpu`);
+          const avalGPU = get(nodeAvaliableGpu, `${nodeKey}.availableGpu`);
+          const usedGpu = !isNil(gpuCap) && !isNil(avalGPU)? gpuCap - avalGPU: '';
+
+          return {
+            nodeName: get(avaliableNodoName, `${nodeKey}.nodeName`, ''),
+            key: nodeKey,
+            nodeIP: nodeHealthInfo[nodeKey].ip,
+            status: nodeHealthInfo[nodeKey].unschedulable == 'false' ? 'OK' : 'unschedulable',
+            gpuCap: get(nodeTotalGpu, `${nodeKey}.totalGpu`, ''),
+            avalGPU: get(nodeAvaliableGpu, `${nodeKey}.availableGpu`, ''),
+            usedGPU: usedGpu,
+            services: get(nodeServices, `${nodeKey}.services`, []),
+            gpuStatistics: get(nodeJobGPUStatistics, `${nodeKey}`, []),
+          };
+        });
+        setValue(nodeStatistics);
       })
       .catch(alert);
   }, []);
 
   return (
-    <Fabric>
-      <Stack gap='m'>
-        <Text variant='xLarge'>{'Node Status:'}</Text>
-        <DetailsList
-          items={value}
-          columns={columns}
-          // getKey={getKey}
-          checkboxVisibility={CheckboxVisibility.hidden}
-          layoutMode={DetailsListLayoutMode.fixedColumns}
-          selectionMode={SelectionMode.none}
-        />
+    <Fabric style={{height: '100%'}}>
+      <Stack gap='m' verticalFill>
+        <Stack.Item>
+          <Text variant='xLarge'>{'Node Status:'}</Text>
+        </Stack.Item>
+        <Stack.Item grow styles={{root: {height: 0, overflow: 'auto', backgroundColor: 'white', padding: 'm'}}}>
+          <DetailsList
+            items={value}
+            columns={columns}
+            // getKey={getKey}
+            checkboxVisibility={CheckboxVisibility.hidden}
+            layoutMode={DetailsListLayoutMode.fixedColumns}
+            selectionMode={SelectionMode.none}
+          />
+        </Stack.Item>
       </Stack>
     </Fabric>
   );
