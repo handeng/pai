@@ -1,0 +1,185 @@
+# Copyright (c) Microsoft Corporation
+# All rights reserved.
+#
+# MIT License
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
+# to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+# BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+################################################################################
+# PAI Job ExitSpec Schema
+################################################################################
+schema:
+  - field: code
+    description: "The PAI Job ExitCode"
+    required: True
+    unique: True
+    type: Integer
+    range:
+      begin: -8000
+      end: 256
+  - field: phrase
+    description: "The textual phrase representation of this ExitCode"
+    required: True
+    unique: True
+    type: String
+    range: "Any"
+  - field: issuer
+    description: "Who root issued this ExitCode in details"
+    required: False
+    unique: False
+    type: Enum
+    range:
+      - USER_CONTAINER
+      - PAI_OS
+      - PAI_RUNTIME
+      - PAI_YARN
+      - PAI_LAUNCHER
+  - field: causer
+    description: "Who root caused this ExitCode in details"
+    required: False
+    unique: False
+    type: Enum
+    range:
+      - USER_SUBMISSION
+      - USER_CONTAINER
+      - USER_STOP
+      - USER_DELETION
+      - USER_RETRY
+      - USER_UPGRADE
+      - RESOURCE_ALLOCATION_TIMEOUT
+      - PAI_HDFS
+      - PAI_OS
+      - PAI_DOCKER
+      - PAI_RUNTIME
+      - PAI_YARN
+      - PAI_LAUNCHER
+      - UNKNOWN
+  - field: type
+    description: "The rough type of this ExitCode"
+    required: False
+    unique: False
+    type: Enum
+    range:
+      - USER_SUCCESS
+      - USER_STOP
+      - USER_FAILURE
+      - PLATFORM_FAILURE
+      - RESOURCE_ALLOCATION_TIMEOUT
+      - UNKNOWN_FAILURE
+  - field: stage
+    description: "The user process stage just before this ExitCode issued"
+    required: False
+    unique: False
+    type: Enum
+    range:
+      - SUBMITTING
+      - ALLOCATING
+      - LAUNCHING
+      - RUNNING
+      - COMPLETING
+      - UNKNOWN
+  - field: behavior
+    description: "The rerun behavior of this ExitCode"
+    required: False
+    unique: False
+    type: Enum
+    range:
+      - TRANSIENT_NORMAL
+      - TRANSIENT_CONFLICT
+      - NON_TRANSIENT
+      - UNKNOWN
+  - field: reaction
+    description: "The reaction for this ExitCode will be executed by PAI automatically"
+    required: False
+    unique: False
+    type: Enum
+    range:
+      - ALWAYS_RETRY
+      - ALWAYS_BACKOFF_RETRY
+      - RETRY_TO_MAX
+      - NEVER_RETRY
+  - field: reason
+    description: "Why this ExitCode is issued"
+    required: False
+    unique: False
+    type: String
+    range: "Any"
+  - field: repro
+    description: "One specific reproduce steps of this ExitCode"
+    required: False
+    unique: False
+    type: List<String>
+    range: "Any"
+  - field: solution
+    description: "Some optional solutions to resolve this ExitCode if it indicates failure"
+    required: False
+    unique: False
+    type: List<String>
+    range: "Any"
+  - field: patterns
+    description: "The pattern that PAI used to detect this ExitCode"
+    required: False
+    unique: False
+    type: List<Object>
+    range: "Any, such as USER_EXITCODE=X && USER_LOG_PATTERN=Y || OS_Signal=Z"
+
+
+################################################################################
+# PAI Job ExitSpec
+################################################################################
+spec:
+################################
+# Range: [129, 192]
+# Owner: PAI_RUNTIME
+# Description: Recognized From YARN / Signal
+################################
+# Container Failed by YARN
+- code: 154
+  phrase: CONTAINER_EXIT_CODE_FILE_LOST
+  issuer: PAI_YARN
+  causer: PAI_YARN
+  type: PLATFORM_FAILURE
+  stage: COMPLETING
+  behavior: TRANSIENT_NORMAL
+  reaction: ALWAYS_RETRY
+  reason: "Container exitcode file cannot be found by YARN NM, maybe node unexpected shutdown, disk cleaned up or disk failure"
+  repro:
+    - "Stop YARN NM"
+    - "Kill container process"
+    - "Delete container exitcode file"
+    - "Start YARN NM"
+  solution:
+    - "Wait result from next retry"
+    - "Contact Cluster Admin"
+
+# Container Failed by OS Signal
+- code: 130
+  phrase: CONTAINER_KILLED_BY_SIGINT
+  issuer: PAI_OS
+  causer: PAI_OS
+  type: PLATFORM_FAILURE
+  stage: RUNNING
+  behavior: TRANSIENT_NORMAL
+  reaction: ALWAYS_RETRY
+  reason: "Container killed by OS Signal: SIGINT"
+  repro:
+    - "Kill container process by SIGINT"
+  solution:
+    - "Wait result from next retry"
+    - "Contact Cluster Admin"
+  patterns:
+    runtimeContainerPatterns:
+      # OR-Elements, default to ANY. The pattern will be ignored if user command exitCode is zero 
+      - exitCode: 130
+        userLogRegex: "sample"
+        platformLogRegex: "sample"
